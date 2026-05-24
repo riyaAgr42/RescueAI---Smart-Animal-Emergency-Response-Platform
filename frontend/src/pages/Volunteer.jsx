@@ -7,21 +7,31 @@ import useCases from "../hooks/useCases.js";
 import api from "../services/api.js";
 import Toast from "../components/Toast.jsx";
 
-const socket = io(import.meta.env.VITE_API_SOCKET || "http://localhost:5000");
-
 const Volunteer = () => {
-  const { cases, loading, refetch } = useCases({ status: "pending" });
+  const { cases, loading, error, refetch } = useCases({ status: "pending" });
   const [query, setQuery] = useState("");
   const [toast, setToast] = useState("");
   const [partners, setPartners] = useState([]);
   const [findingHelp, setFindingHelp] = useState(false);
 
   useEffect(() => {
+    const socket = io(import.meta.env.VITE_API_SOCKET || "http://localhost:5000", {
+      reconnectionAttempts: 2,
+      timeout: 4000,
+      autoConnect: true,
+    });
+
     socket.on("case:new", refetch);
     socket.on("case:update", refetch);
+    socket.on("connect_error", () => {
+      setToast((current) => current || "Realtime server is offline. Start backend to enable live volunteer alerts.");
+    });
+
     return () => {
       socket.off("case:new", refetch);
       socket.off("case:update", refetch);
+      socket.off("connect_error");
+      socket.disconnect();
     };
   }, []);
 
@@ -125,6 +135,13 @@ const Volunteer = () => {
         </div>
         {loading ? (
           <Spinner />
+        ) : error ? (
+          <div className="panel space-y-3">
+            <h3 className="text-xl font-semibold text-slate-900 dark:text-white">
+              Volunteer cases are temporarily unavailable
+            </h3>
+            <p className="text-sm leading-6 text-slate-600 dark:text-slate-300">{error}</p>
+          </div>
         ) : (
           <div className="grid md:grid-cols-2 gap-4">
             {filtered.map((c) => (

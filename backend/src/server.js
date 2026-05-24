@@ -6,6 +6,7 @@ import { createServer } from "http";
 import { Server as SocketIOServer } from "socket.io";
 import path from "path";
 import { fileURLToPath } from "url";
+import mongoose from "mongoose";
 import connectDB from "./config/db.js";
 import authRoutes from "./routes/authRoutes.js";
 import caseRoutes from "./routes/caseRoutes.js";
@@ -16,6 +17,8 @@ import partnerRoutes from "./routes/partnerRoutes.js";
 import animalRoutes from "./routes/animalRoutes.js";
 import adoptionRoutes from "./routes/adoptionRoutes.js";
 import donationRoutes from "./routes/donationRoutes.js";
+import requestLimiter from "./middleware/requestLimiter.js";
+import registerSocketHandlers from "./socket/registerSocketHandlers.js";
 
 dotenv.config();
 
@@ -24,9 +27,10 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const httpServer = createServer(app);
+
 const rawAllowed = (process.env.CLIENT_URL || "*")
   .split(",")
-  .map((o) => o.trim())
+  .map((origin) => origin.trim())
   .filter(Boolean);
 const allowAll = process.env.NODE_ENV !== "production" && rawAllowed.includes("*");
 const allowedOrigins = allowAll ? true : rawAllowed;
@@ -39,13 +43,8 @@ const io = new SocketIOServer(httpServer, {
   },
 });
 
-// Socket wiring (minimal)
-io.on("connection", (socket) => {
-  console.log("Socket connected", socket.id);
-  socket.on("disconnect", () => console.log("Socket disconnected", socket.id));
-});
+registerSocketHandlers(io);
 
-// Middlewares
 app.use(
   cors({
     origin: allowAll ? true : allowedOrigins,
@@ -54,9 +53,26 @@ app.use(
 );
 app.use(express.json({ limit: "10mb" }));
 app.use(morgan("dev"));
+app.use(requestLimiter());
 app.use("/uploads", express.static(path.join(__dirname, "..", "uploads")));
 
-// Routes
+app.get("/api/health", (req, res) => {
+  res.json({
+    server: "up",
+    database: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
+  });
+});
+
+app.use("/api", (req, res, next) => {
+  if (mongoose.connection.readyState === 1) {
+    return next();
+  }
+
+  return res.status(503).json({
+    message: "Database is currently unavailable. Start MongoDB Atlas or fix MONGO_URI, then retry.",
+  });
+});
+
 app.use("/api/auth", authRoutes);
 app.use("/api/cases", caseRoutes(io));
 app.use("/api/volunteer", volunteerRoutes(io));
@@ -71,12 +87,14 @@ app.get("/", (req, res) => {
   res.json({ message: "RescueAI API is running" });
 });
 
-// Start
 const PORT = process.env.PORT || 5000;
+
 const start = async () => {
-  await connectDB();
+  const dbConnected = await connectDB();
   httpServer.listen(PORT, () =>
-    console.log(`Server running on http://localhost:${PORT}`)
+    console.log(
+      `Server running on http://localhost:${PORT}${dbConnected ? "" : " (database unavailable mode)"}`
+    )
   );
 };
 

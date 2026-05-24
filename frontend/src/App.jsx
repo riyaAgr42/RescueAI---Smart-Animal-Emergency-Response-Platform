@@ -1,6 +1,7 @@
 import React from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import Navbar from "./components/Navbar.jsx";
+import AppShell from "./components/layout/AppShell.jsx";
 import Landing from "./pages/Landing.jsx";
 import Login from "./pages/Login.jsx";
 import Signup from "./pages/Signup.jsx";
@@ -26,9 +27,9 @@ const ProtectedRoute = ({ children, roles }) => {
 };
 
 const App = () => (
-  <div className="min-h-screen bg-hero-gradient">
+  <AppShell>
     <Navbar />
-    <main className="max-w-6xl mx-auto px-4 py-8">
+    <main className="mx-auto max-w-7xl px-4 py-8">
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/login" element={<Login />} />
@@ -123,7 +124,7 @@ const App = () => (
         />
       </Routes>
     </main>
-  </div>
+  </AppShell>
 );
 
 export default App;

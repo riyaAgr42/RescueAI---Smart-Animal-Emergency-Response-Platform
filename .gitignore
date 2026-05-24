@@ -20,6 +20,9 @@ frontend/.env.*
 dist/
 frontend/dist/
 
+# Runtime uploads
+backend/uploads/
+
 # Logs
 *.log
 npm-debug.log*
